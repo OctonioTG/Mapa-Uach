@@ -1,0 +1,21 @@
+# Dependencias
+node_modules/
+
+# Variables de entorno y credenciales
+.env
+.env.*
+!.env.example
+
+# Compilación y caché de Angular
+dist/
+.angular/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Sistema operativo y editores
+.DS_Store
+.vscode/
+.idea/
+

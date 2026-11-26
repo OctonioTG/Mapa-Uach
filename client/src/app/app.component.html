@@ -1,0 +1,253 @@
+<div class="app-shell">
+  <!-- Aura decorativa superior -->
+  <div class="aura-bg" aria-hidden="true"></div>
+
+  <!-- Barra superior -->
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo-mark" aria-hidden="true">✦</div>
+      <div>
+        <span class="brand-name">Eventos Carnet UACH</span>
+        <span class="brand-city">Chihuahua</span>
+      </div>
+    </div>
+
+    <div class="topbar-actions">
+      <div class="search-box">
+        <span class="search-icon">⌕</span>
+        <input
+          type="search"
+          [(ngModel)]="busqueda"
+          placeholder="Buscar eventos..."
+          aria-label="Buscar eventos"
+        />
+      </div>
+
+      <button type="button" class="btn-create" (click)="abrirModal()">
+        <span>+</span> Crear evento
+      </button>
+    </div>
+  </header>
+
+  <!-- Contenido principal: Feed + Mapa -->
+  <div class="workspace">
+    <!-- Columna izquierda: Descubrir eventos -->
+    <aside class="feed-panel">
+      <div class="feed-header">
+        <div>
+          <h1>Cartelera de eventos</h1>
+          <p class="subtitle">Explora actividades del carnet o haz clic en el mapa para publicar una.</p>
+        </div>
+        <span class="count-pill">{{ eventosFiltrados.length }}</span>
+      </div>
+
+      <!-- Filtros por categoría -->
+      <div class="category-bar" role="tablist" aria-label="Filtrar por categoría">
+        <button
+          type="button"
+          class="cat-pill"
+          [class.active]="filtroCategoria === 'Todas'"
+          (click)="filtroCategoria = 'Todas'">
+          Todas
+        </button>
+        @for (c of categorias; track c) {
+          <button
+            type="button"
+            class="cat-pill"
+            [class.active]="filtroCategoria === c"
+            (click)="filtroCategoria = c">
+            <span class="dot" [style.background]="colores[c]"></span>
+            {{ c }}
+          </button>
+        }
+      </div>
+
+      <!-- Lista de tarjetas -->
+      <div class="events-list">
+        @for (ev of eventosFiltrados; track ev.id) {
+          <article
+            class="event-card"
+            [class.selected]="eventoSeleccionadoId === ev.id"
+            (click)="irAEvento(ev)">
+            @if (ev.imagenes?.length) {
+              <img class="event-thumb" [src]="ev.imagenes![0]" [alt]="ev.titulo" />
+            } @else {
+              <div class="date-badge">
+                <span class="month">{{ ev.fecha | date: 'MMM' | uppercase }}</span>
+                <span class="day">{{ ev.fecha | date: 'd' }}</span>
+              </div>
+            }
+
+            <div class="event-body">
+              <div class="event-meta-top">
+                <span class="event-time">{{ ev.fecha | date: 'd MMM · HH:mm' }} hrs</span>
+                <span
+                  class="cat-tag"
+                  [style.color]="colores[ev.categoria]"
+                  [style.background]="fondosCat[ev.categoria]">
+                  <span class="dot-sm" [style.background]="colores[ev.categoria]"></span>
+                  {{ ev.categoria }}
+                </span>
+              </div>
+
+              <h3 class="event-title">{{ ev.titulo }}</h3>
+
+              @if (ev.descripcion) {
+                <p class="event-desc">{{ ev.descripcion }}</p>
+              }
+            </div>
+
+            <button
+              type="button"
+              class="btn-delete"
+              title="Eliminar evento"
+              (click)="eliminar(ev, $event)">
+              ✕
+            </button>
+          </article>
+        } @empty {
+          <div class="empty-state">
+            <div class="empty-icon">🗓️</div>
+            <h3>No hay eventos todavía</h3>
+            <p>Haz clic en cualquier punto del mapa o presiona <strong>Crear evento</strong> para agregar el primero.</p>
+            <button type="button" class="btn-secondary" (click)="abrirModal()">+ Crear primer evento</button>
+          </div>
+        }
+      </div>
+    </aside>
+
+    <!-- Columna derecha: Mapa redondeado -->
+    <main class="map-container">
+      <div class="map-card">
+        <div #mapa class="mapa"></div>
+
+        <!-- Píldora flotante informativa -->
+        <div class="map-floating-hint" [class.picking]="seleccionandoMapa">
+          @if (seleccionandoMapa) {
+            <span>📍 Haz clic en el mapa para fijar la ubicación</span>
+            <button type="button" class="hint-cancel" (click)="seleccionandoMapa = false; modalAbierto = true">Cancelar</button>
+          } @else {
+            <span>👆 Pasa el cursor sobre un pin para ver el flyer · Clic en el mapa para crear</span>
+          }
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- Modal para Crear Evento -->
+@if (modalAbierto) {
+  <div class="modal-backdrop" (click)="cerrarModal()">
+    <div class="modal-card" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <div>
+          <h2>Nuevo evento</h2>
+          <p>Agrega una actividad para Eventos Carnet UACH</p>
+        </div>
+        <button type="button" class="modal-close" (click)="cerrarModal()">✕</button>
+      </div>
+
+      <form #f="ngForm" (ngSubmit)="guardar(f)" novalidate>
+        <div class="field">
+          <label for="titulo">Nombre del evento *</label>
+          <input
+            id="titulo"
+            name="titulo"
+            [(ngModel)]="form.titulo"
+            required
+            maxlength="120"
+            placeholder="Ej. Congreso de Ingeniería, Torneo Deportivo..."
+          />
+        </div>
+
+        <div class="field">
+          <label>Categoría</label>
+          <div class="cat-selector">
+            @for (c of categorias; track c) {
+              <button
+                type="button"
+                class="cat-option"
+                [class.active]="form.categoria === c"
+                [style.--cat-color]="colores[c]"
+                [style.--cat-bg]="fondosCat[c]"
+                (click)="form.categoria = c">
+                <span class="dot" [style.background]="colores[c]"></span>
+                {{ c }}
+              </button>
+            }
+          </div>
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label for="fecha">Fecha y hora *</label>
+            <input id="fecha" type="datetime-local" name="fecha" [(ngModel)]="form.fecha" required />
+          </div>
+
+          <div class="field">
+            <label>Ubicación *</label>
+            <button
+              type="button"
+              class="location-picker-btn"
+              [class.has-location]="form.lat !== null"
+              (click)="activarModoMapa()">
+              @if (form.lat !== null) {
+                <span>📍 {{ form.lat }}, {{ form.lng }}</span>
+              } @else {
+                <span>🗺️ Elegir en el mapa</span>
+              }
+            </button>
+          </div>
+        </div>
+
+        <!-- Fotos y flyers -->
+        <div class="field">
+          <label>Fotos y flyers (máx. 6)</label>
+          <label class="upload-zone">
+            <input
+              type="file"
+              accept="image/*"
+              multiple
+              (change)="onImagenesSeleccionadas($event)"
+            />
+            <span>{{ procesandoImagenes ? 'Procesando imágenes…' : '🖼️ Subir fotos o flyers del evento' }}</span>
+          </label>
+
+          @if (form.imagenes.length) {
+            <div class="preview-grid">
+              @for (img of form.imagenes; track $index) {
+                <div class="preview-item">
+                  <img [src]="img" alt="Vista previa" />
+                  <button type="button" class="preview-remove" (click)="quitarImagen($index)" title="Quitar">✕</button>
+                </div>
+              }
+            </div>
+          }
+        </div>
+
+        <div class="field">
+          <label for="descripcion">Descripción</label>
+          <textarea
+            id="descripcion"
+            name="descripcion"
+            [(ngModel)]="form.descripcion"
+            rows="2"
+            maxlength="1000"
+            placeholder="¿Qué deben saber los asistentes? (opcional)"
+          ></textarea>
+        </div>
+
+        @if (error) {
+          <p class="form-error">{{ error }}</p>
+        }
+
+        <div class="modal-footer">
+          <button type="button" class="btn-ghost" (click)="cerrarModal()">Cancelar</button>
+          <button type="submit" class="btn-publish" [disabled]="guardando || procesandoImagenes">
+            {{ guardando ? 'Publicando…' : 'Publicar evento' }}
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+}
