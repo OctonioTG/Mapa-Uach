@@ -1,45 +1,43 @@
-# POC – Mapa Interactivo de Eventos Comunitarios
+# Eventos Carnet UACH – Mapa Interactivo
 
-Prueba de concepto que demuestra la integración de:
+Aplicación web para descubrir y publicar eventos del Carnet Universitario UACH sobre un mapa interactivo.
 
 | Tecnología | Para qué se usa |
 |---|---|
-| **Angular 18** | Aplicación web (formulario, lista de eventos y mapa) |
-| **Mapbox GL JS** | Mapa interactivo, marcadores y popups |
-| **MongoDB Atlas** | Base de datos en la nube donde se guardan los eventos |
-| Node.js + Express | API pequeña que conecta Angular con Atlas |
+| **Angular 18** | Aplicación web (cartelera, buscador, filtros, modal de creación y mapa) |
+| **Mapbox GL JS + OpenStreetMap** | Mapa interactivo gratuito (sin token obligatorio), marcadores, hover cards y popups |
+| **MongoDB Atlas** | Base de datos en la nube donde se guardan los eventos, flyers y coordenadas |
+| **Node.js + Express** | API REST que conecta Angular con MongoDB Atlas de forma segura |
 
 > **¿Por qué hay un servidor en Node?** Angular corre en el navegador y no debe
-> conectarse directo a MongoDB, porque la contraseña de la base quedaría expuesta
-> a cualquiera. La API en Express guarda la cadena de conexión de forma privada
-> y Angular solo le habla por HTTP.
+> conectarse directo a MongoDB, porque la cadena de conexión quedaría expuesta.
+> La API en Express guarda `MONGODB_URI` de forma privada y Angular se comunica por HTTP.
 
 ## Arquitectura
 
 ```
-[ Navegador: Angular + Mapbox ]  --HTTP /api/events-->  [ API Express ]  --driver-->  [ MongoDB Atlas ]
+[ Navegador: Angular + OpenStreetMap ]  --HTTP /api/events-->  [ API Express ]  --driver-->  [ MongoDB Atlas ]
 ```
 
 ## Qué hace
 
-- Muestra un mapa (centrado en Chihuahua) con todos los eventos guardados en Atlas.
-- Al hacer **clic en el mapa** se elige la ubicación de un evento nuevo (el pin rojo se puede arrastrar).
-- Formulario con título, descripción, categoría y fecha/hora → **se guarda en MongoDB Atlas** y aparece el marcador al instante.
-- Cada categoría tiene su color; al hacer clic en un marcador se ve el detalle.
-- La lista lateral permite volar al evento en el mapa o eliminarlo.
-- Las ubicaciones se guardan como **GeoJSON** con índice `2dsphere`, listas para consultas tipo "eventos cerca de mí".
+- **Mapa interactivo gratuito**: Centrado en Chihuahua (`[-106.0889, 28.6353]`) usando mosaicos de OpenStreetMap (no requiere token de Mapbox; si se agrega uno en `environment.ts`, lo usa automáticamente).
+- **Publicación con clic en el mapa**: Haz clic en cualquier punto del mapa o presiona **+ Crear evento** para abrir el modal y fijar la ubicación (el pin rojo se puede arrastrar).
+- **Fotos y flyers**: Permite adjuntar hasta 6 imágenes o flyers por evento (se comprimen automáticamente en el navegador antes de guardarse en MongoDB Atlas).
+- **Hover card en el mapa**: Al pasar el cursor sobre un pin del mapa aparece un recuadro flotante con las fotos/flyers, el nombre del evento y su fecha. Al hacer clic se abre el detalle completo con descripción.
+- **Cartelera con filtros y búsqueda**: Barra superior de búsqueda instantánea, filtros por categoría (`Cultural`, `Deportivo`, `Educativo`, `Voluntariado`, `Otro`), tarjetas con miniatura y opción para volar al evento o eliminarlo.
+- **Datos geoespaciales**: Las ubicaciones se almacenan como **GeoJSON** (`Point`) con índice `2dsphere`.
 
 ## Requisitos
 
 - Node.js 18 o superior
 - Cuenta gratuita de [MongoDB Atlas](https://www.mongodb.com/atlas)
-- Cuenta gratuita de [Mapbox](https://account.mapbox.com/)
 
 ## Paso 1 – Configurar MongoDB Atlas
 
 1. Crea un cluster gratuito (**M0**).
 2. En **Database Access** crea un usuario con contraseña.
-3. En **Network Access** agrega tu IP (o `0.0.0.0/0` solo para la demo).
+3. En **Network Access** agrega tu IP (o `0.0.0.0/0` para desarrollo).
 4. En **Database → Connect → Drivers → Node.js** copia la cadena de conexión.
 
 ## Paso 2 – Levantar la API
@@ -52,13 +50,9 @@ cp .env.example .env      # en Windows: copy .env.example .env
 npm start
 ```
 
-Debe decir: `Conectado a MongoDB Atlas` y `API escuchando en http://localhost:3000`.
-La base `mapa_eventos` y la colección `eventos` se crean solas.
+Debe mostrar: `Conectado a MongoDB Atlas (base: mapa_eventos)` y `API escuchando en http://localhost:3000`.
 
 ## Paso 3 – Levantar Angular
-
-1. Copia tu token público de Mapbox (empieza con `pk.`).
-2. Pégalo en `client/src/environments/environment.ts` en `mapboxToken`.
 
 ```bash
 cd client
@@ -66,50 +60,47 @@ npm install
 npm start
 ```
 
-Abre **http://localhost:4200**. El `proxy.conf.json` redirige `/api` hacia el puerto 3000.
+Abre **http://localhost:4200**. El archivo `proxy.conf.json` redirige `/api` hacia el puerto `3000`.
+
+*(Opcional: si deseas usar estilos de Mapbox en lugar de OpenStreetMap gratuito, pega tu token `pk.` en `client/src/environments/environment.ts` en `mapboxToken`).*
 
 ## Endpoints de la API
 
 | Método | Ruta | Descripción |
 |---|---|---|
-| GET | `/api/events` | Lista todos los eventos |
-| POST | `/api/events` | Crea un evento `{ titulo, descripcion, categoria, fecha, lat, lng }` |
-| DELETE | `/api/events/:id` | Elimina un evento |
+| GET | `/api/events` | Lista todos los eventos ordenados por fecha |
+| POST | `/api/events` | Crea un evento `{ titulo, descripcion, categoria, fecha, imagenes, lat, lng }` |
+| DELETE | `/api/events/:id` | Elimina un evento por ID |
 
 ## Ejemplo de documento en Atlas
 
 ```json
 {
   "_id": "6740f1...",
-  "titulo": "Limpieza del parque",
-  "descripcion": "Traer guantes y bolsas",
-  "categoria": "Voluntariado",
-  "fecha": "2026-11-23T16:00:00.000Z",
+  "titulo": "Congreso de Ingeniería",
+  "descripcion": "Auditorio principal, entrada con carnet",
+  "categoria": "Educativo",
+  "fecha": "2026-11-28T16:00:00.000Z",
+  "imagenes": ["data:image/jpeg;base64,..."],
   "ubicacion": { "type": "Point", "coordinates": [-106.0889, 28.6353] },
-  "creadoEn": "2026-11-19T22:00:00.000Z"
+  "creadoEn": "2026-11-26T20:00:00.000Z"
 }
 ```
 
 ## Estructura
 
 ```
-mapa-eventos-poc/
-├── server/                 API Express + driver oficial de MongoDB
-│   ├── index.js
-│   └── .env.example
-└── client/                 Angular 18 (componentes standalone)
-    ├── proxy.conf.json
+UX/
+├── .gitignore                Excluye node_modules, .env, dist y caché
+├── server/                   API Express + driver oficial de MongoDB
+│   ├── index.js              Endpoints y conexión a MongoDB Atlas (límite JSON 10MB)
+│   └── .env.example          Plantilla de variables de entorno
+└── client/                   Angular 18 (componentes standalone)
+    ├── angular.json          Configuración de estilos y worker de Mapbox GL
+    ├── proxy.conf.json       Proxy /api -> http://localhost:3000
     └── src/
-        ├── environments/environment.ts   token de Mapbox
+        ├── environments/environment.ts   Centro inicial y token opcional
         └── app/
-            ├── app.component.*           mapa + formulario + lista
-            └── evento.service.ts         llamadas HTTP a la API
+            ├── app.component.*           Cartelera, modal con flyers, mapa y hover cards
+            └── evento.service.ts         Llamadas HTTP a la API
 ```
-
-## Conclusión de la POC
-
-Se comprueba que las tres tecnologías se integran sin problema: Angular consume
-la API, Mapbox muestra y captura ubicaciones, y MongoDB Atlas guarda los eventos
-con datos geoespaciales. Siguientes pasos para la app real: autenticación de
-usuarios, filtros por fecha/categoría, búsqueda por cercanía con `$near` y
-despliegue (por ejemplo, la API en Render/Railway y Angular en Vercel/Netlify).
